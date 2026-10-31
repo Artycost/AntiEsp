@@ -1,0 +1,8 @@
+name: AntiEsp
+version: '1.0-SNAPSHOT'
+main: ru.antiEsp.AntiEsp
+api-version: '1.21'
+depend: [packetevents]
+permissions:
+  antiesp.bypass:
+    default: false
