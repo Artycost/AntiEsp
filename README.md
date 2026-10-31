@@ -9,7 +9,7 @@ AntiEsp — плагин для Paper 1.21.11, который ограничив
 - скрывает игроков и их экипировку за стенами;
 - мгновенно возвращает игрока при появлении прямой видимости;
 - быстрее скрывает невидимых игроков;
-- подменяет клиентское название передаваемой брони на `@koaniax`, не изменяя реальные предметы;
+- подменяет клиентское название передаваемой брони на `@freakdev`, не изменяя реальные предметы;
 - поддерживает право `antiesp.bypass` для исключения отдельных наблюдателей;
 - использует PacketEvents для обработки пакетов экипировки.
 
@@ -42,7 +42,7 @@ AntiEsp is a Paper 1.21.11 plugin that limits the player data sent to clients wh
 - hides players and their equipment behind walls;
 - restores a player immediately when direct line of sight is available;
 - hides invisible players more aggressively;
-- replaces the client-side display name of transmitted armor with `@koaniax` without modifying the real items;
+- replaces the client-side display name of transmitted armor with `@freakdev` without modifying the real items;
 - provides the `antiesp.bypass` permission for exempt viewers;
 - uses PacketEvents for equipment packet processing.
 
