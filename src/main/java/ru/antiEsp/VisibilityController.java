@@ -8,6 +8,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.util.Vector;
 
@@ -77,9 +78,14 @@ final class VisibilityController implements Listener {
         Location eye = viewer.getEyeLocation();
         Location base = target.getLocation();
         double height = Math.max(0.6, target.getHeight());
+        double radius = Math.max(0.2, target.getWidth() * 0.48);
         return clear(eye, base.clone().add(0.0, 0.15, 0.0))
                 || clear(eye, base.clone().add(0.0, height * 0.5, 0.0))
-                || clear(eye, base.clone().add(0.0, height * 0.92, 0.0));
+                || clear(eye, base.clone().add(0.0, height * 0.92, 0.0))
+                || clear(eye, base.clone().add(radius, height * 0.55, 0.0))
+                || clear(eye, base.clone().add(-radius, height * 0.55, 0.0))
+                || clear(eye, base.clone().add(0.0, height * 0.55, radius))
+                || clear(eye, base.clone().add(0.0, height * 0.55, -radius));
     }
 
     private boolean clear(Location from, Location to) {
@@ -116,6 +122,57 @@ final class VisibilityController implements Listener {
     public void onJoin(PlayerJoinEvent event) {
         hidden.put(event.getPlayer().getUniqueId(), new HashSet<>());
         blockedTicks.put(event.getPlayer().getUniqueId(), new HashMap<>());
+    }
+
+    @EventHandler
+    public void onMove(PlayerMoveEvent event) {
+        if (!positionChanged(event.getFrom(), event.getTo())) {
+            return;
+        }
+        Player moved = event.getPlayer();
+        revealVisible(moved);
+        for (Player viewer : Bukkit.getOnlinePlayers()) {
+            if (!viewer.equals(moved) && isHidden(viewer, moved)) {
+                reveal(viewer, moved);
+            }
+        }
+    }
+
+    private boolean positionChanged(Location from, Location to) {
+        return from.getX() != to.getX() || from.getY() != to.getY() || from.getZ() != to.getZ()
+                || !from.getWorld().equals(to.getWorld());
+    }
+
+    private void revealVisible(Player viewer) {
+        Set<UUID> targets = hidden.get(viewer.getUniqueId());
+        if (targets == null || targets.isEmpty()) {
+            return;
+        }
+        for (UUID uuid : Set.copyOf(targets)) {
+            Player target = Bukkit.getPlayer(uuid);
+            if (target != null) {
+                reveal(viewer, target);
+            }
+        }
+    }
+
+    private boolean isHidden(Player viewer, Player target) {
+        Set<UUID> targets = hidden.get(viewer.getUniqueId());
+        return targets != null && targets.contains(target.getUniqueId());
+    }
+
+    private void reveal(Player viewer, Player target) {
+        if (!canReveal(viewer, target) || !hasDirectView(viewer, target)) {
+            return;
+        }
+        Set<UUID> targets = hidden.get(viewer.getUniqueId());
+        if (targets != null && targets.remove(target.getUniqueId())) {
+            Map<UUID, Integer> counters = blockedTicks.get(viewer.getUniqueId());
+            if (counters != null) {
+                counters.remove(target.getUniqueId());
+            }
+            viewer.showPlayer(plugin, target);
+        }
     }
 
     @EventHandler
