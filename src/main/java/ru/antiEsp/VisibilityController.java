@@ -4,13 +4,16 @@ import org.bukkit.Bukkit;
 import org.bukkit.FluidCollisionMode;
 import org.bukkit.Location;
 import org.bukkit.World;
+import org.bukkit.entity.Display;
 import org.bukkit.entity.Player;
+import org.bukkit.entity.TextDisplay;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.util.Vector;
+import net.kyori.adventure.text.Component;
 
 import java.util.HashMap;
 import java.util.HashSet;
@@ -24,6 +27,7 @@ final class VisibilityController implements Listener {
     private final AntiEsp plugin;
     private final Map<UUID, Set<UUID>> hidden = new HashMap<>();
     private final Map<UUID, Map<UUID, Integer>> blockedTicks = new HashMap<>();
+    private final Map<UUID, TextDisplay> nameTags = new HashMap<>();
 
     VisibilityController(AntiEsp plugin) {
         this.plugin = plugin;
@@ -34,6 +38,9 @@ final class VisibilityController implements Listener {
     }
 
     private void update() {
+        for (Player target : Bukkit.getOnlinePlayers()) {
+            updateNameTag(target);
+        }
         for (Player viewer : Bukkit.getOnlinePlayers()) {
             if (viewer.hasPermission("antiesp.bypass")) {
                 restore(viewer);
@@ -49,14 +56,18 @@ final class VisibilityController implements Listener {
                 if (visible) {
                     viewerBlocked.remove(target.getUniqueId());
                     if (viewerHidden.remove(target.getUniqueId())) {
-                        viewer.showPlayer(plugin, target);
+                        viewer.showEntity(plugin, target);
                     }
+                    hideNameTag(viewer, target);
                     continue;
                 }
                 int ticks = viewerBlocked.merge(target.getUniqueId(), 1, Integer::sum);
                 int delay = target.isInvisible() ? 1 : NORMAL_HIDE_DELAY;
                 if (ticks >= delay && viewerHidden.add(target.getUniqueId())) {
-                    viewer.hidePlayer(plugin, target);
+                    viewer.hideEntity(plugin, target);
+                }
+                if (viewerHidden.contains(target.getUniqueId())) {
+                    showNameTag(viewer, target);
                 }
             }
             viewerHidden.removeIf(uuid -> Bukkit.getPlayer(uuid) == null);
@@ -107,7 +118,8 @@ final class VisibilityController implements Listener {
         for (UUID uuid : targets) {
             Player target = Bukkit.getPlayer(uuid);
             if (target != null) {
-                viewer.showPlayer(plugin, target);
+                viewer.showEntity(plugin, target);
+                hideNameTag(viewer, target);
             }
         }
     }
@@ -116,12 +128,17 @@ final class VisibilityController implements Listener {
         for (Player viewer : Bukkit.getOnlinePlayers()) {
             restore(viewer);
         }
+        for (TextDisplay nameTag : nameTags.values()) {
+            nameTag.remove();
+        }
+        nameTags.clear();
     }
 
     @EventHandler
     public void onJoin(PlayerJoinEvent event) {
         hidden.put(event.getPlayer().getUniqueId(), new HashSet<>());
         blockedTicks.put(event.getPlayer().getUniqueId(), new HashMap<>());
+        updateNameTag(event.getPlayer());
     }
 
     @EventHandler
@@ -171,7 +188,51 @@ final class VisibilityController implements Listener {
             if (counters != null) {
                 counters.remove(target.getUniqueId());
             }
-            viewer.showPlayer(plugin, target);
+            viewer.showEntity(plugin, target);
+            hideNameTag(viewer, target);
+        }
+    }
+
+    private void updateNameTag(Player target) {
+        TextDisplay nameTag = nameTags.get(target.getUniqueId());
+        if (nameTag == null || !nameTag.isValid() || !nameTag.getWorld().equals(target.getWorld())) {
+            if (nameTag != null) {
+                nameTag.remove();
+            }
+            nameTag = createNameTag(target);
+            nameTags.put(target.getUniqueId(), nameTag);
+        }
+        Location location = target.getLocation().add(0.0, target.getHeight() + 0.35, 0.0);
+        nameTag.teleport(location);
+        nameTag.text(Component.text(target.getName()));
+    }
+
+    private TextDisplay createNameTag(Player target) {
+        Location location = target.getLocation().add(0.0, target.getHeight() + 0.35, 0.0);
+        return target.getWorld().spawn(location, TextDisplay.class, nameTag -> {
+            nameTag.text(Component.text(target.getName()));
+            nameTag.setBillboard(Display.Billboard.CENTER);
+            nameTag.setSeeThrough(true);
+            nameTag.setShadowed(true);
+            nameTag.setDefaultBackground(false);
+            nameTag.setGravity(false);
+            nameTag.setInvulnerable(true);
+            nameTag.setPersistent(false);
+            nameTag.setVisibleByDefault(false);
+        });
+    }
+
+    private void showNameTag(Player viewer, Player target) {
+        TextDisplay nameTag = nameTags.get(target.getUniqueId());
+        if (nameTag != null && nameTag.isValid()) {
+            viewer.showEntity(plugin, nameTag);
+        }
+    }
+
+    private void hideNameTag(Player viewer, Player target) {
+        TextDisplay nameTag = nameTags.get(target.getUniqueId());
+        if (nameTag != null && nameTag.isValid()) {
+            viewer.hideEntity(plugin, nameTag);
         }
     }
 
@@ -179,6 +240,10 @@ final class VisibilityController implements Listener {
     public void onQuit(PlayerQuitEvent event) {
         restore(event.getPlayer());
         UUID uuid = event.getPlayer().getUniqueId();
+        TextDisplay nameTag = nameTags.remove(uuid);
+        if (nameTag != null) {
+            nameTag.remove();
+        }
         hidden.values().forEach(set -> set.remove(uuid));
         blockedTicks.values().forEach(map -> map.remove(uuid));
     }
